@@ -1,9 +1,12 @@
-import sets, strformat, options
+import sets, strformat, options, sequtils
 
 type
   ## A game board is a simple 2 dimensional array.
   ## Markers of any type can be placed inside the cells
   Board*[T] = array[3, array[3, T]]
+
+  ## A Position in a board
+  Coordinate* = tuple[x: int, y:int]
 
   Player* = ref object
     mark*: Mark
@@ -20,11 +23,16 @@ type
     board*: Board[Board[Mark]]
     players*: array[2, Player]
     currentPlayer*: Player
-    currentBoard*: Option[(int, int)]
+    currentBoard*: Option[Coordinate]
     result*: Mark
     turn*: int
 
+  IllegalMoveError* = object of Exception
+
 proc `$`*(player: Player): string = 
+  $player.name
+
+proc `$`*(player: ref Player): string = 
   $player.name
 
 proc `$`*(game: GameState): string = 
@@ -51,8 +59,10 @@ proc newMetaBoard[T](val: T): Board[Board[T]] =
     [newBoard(val), newBoard(val), newBoard(val)]
   ]
 
-proc newGame*(player1, player2: Player): GameState =
+proc newGame*(player1: var Player, player2: var Player): GameState =
   ## Create a new game board
+  player1.mark = mPlayer1
+  player2.mark = mPlayer2
   GameState(
     players: [player1, player2],
     currentPlayer: player1,
@@ -126,7 +136,6 @@ proc checkBoard*(board: Board[Mark]): Mark =
 
   return selectResult(states)
     
-
 proc checkBoard*(board: Board[Board[Mark]]): Mark =
   ## Perform a check on a metaboard to see the overall game result
 
@@ -138,3 +147,46 @@ proc checkBoard*(board: Board[Board[Mark]]): Mark =
     for y in 0 .. 2:
       subResults[x][y] = checkBoard(board[x][y])
   return checkBoard(subResults)
+
+###################################################
+# Process Player Moves
+###################################################
+
+proc makeMove*(state: GameState, cell: Coordinate): GameState = 
+  if cell.x > 2 or cell.y > 2:
+    raise newException(IndexError, "Move target not in bounds of the board")
+  if state.currentBoard.isNone:    
+    raise newException(ValueError, "No board value passed")
+
+  let board = state.currentBoard.get()
+  var currBoard = state.board[board.x][board.y]
+
+  if currBoard[cell.x][cell.y] != mFree:
+    raise newException(IllegalMoveError, "Chosen cell is not free")
+
+  state.board[board.x][board.y][cell.x][cell.y] = state.currentPlayer.mark
+  state.turn += 1  
+  state.result = checkBoard(state.board)
+
+  # Exit early. The game has ended.
+  if state.result != mFree:
+    return state
+
+  let nextBoard = checkBoard(state.board[cell.x][cell.y])
+  if nextBoard == mFree:
+    state.currentBoard = cell.some()
+  else:
+    state.currentBoard = none(Coordinate)
+
+  state.currentPlayer = state.players.filter(proc (p: Player): bool = 
+    p.mark != state.currentPlayer.mark)[0]
+  
+  return state
+
+proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): GameState = 
+  if checkBoard(state.board[boardChoice.x][boardChoice.y]) != mFree:
+    raise newException(IllegalMoveError, "Player must choose an open board to play in")
+  if state.currentBoard.isSome:
+    raise newException(IllegalMoveError, "Player does not have free choice for board")
+  state.currentBoard = boardChoice.some()
+  return state.makeMove(cell)
