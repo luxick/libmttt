@@ -1,4 +1,4 @@
-name: Test Build
+name: Tests
 
 on: [push]
 
@@ -22,5 +22,4 @@ jobs:
         path: ~/.nimble
         key: ${{ runner.os }}-nimble-stable
     - uses: jiro4989/setup-nim-action@v1.0.1
-    - run: nimble build -Y
     - run: nimble test -Y
