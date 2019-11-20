@@ -47,7 +47,7 @@ suite "Test the board result checker":
     ]
     check(checkBoard(game.board[0][0]) == Mark.Player1)
 
-  test "board is a draw":      
+  test "board is a draw":
     game.board[0][0] = [
       [Mark.Player1, Mark.Player2, Mark.Player1],
       [Mark.Player2, Mark.Player1, Mark.Player1],

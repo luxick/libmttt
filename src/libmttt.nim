@@ -50,7 +50,7 @@ proc newGameState*(player1: var Player, player2: var Player): GameState =
     players: [player1, player2],
     currentPlayer: player1,
     result: Mark.Free,
-    board: newBoard(newBoard(Mark.Free)))
+    board: newBoard(newBoard(Mark.Free))) # The meta board is a board of boards
 
 ###################################################
 # Board Checking
@@ -69,6 +69,19 @@ proc selectResult(states: HashSet[Mark]): Mark =
   if states.contains(Mark.Free):
     return Mark.Free
   return Mark.Draw
+
+proc transposed(board: Board): Board =
+  ## Flip a board along the axis from top left to bottom right
+  result = newBoard(Mark.Free);
+  for x in 0 .. 2:
+      for y in 0 .. 2:
+        result[x][y] = board[y][x]
+
+proc flipped(board: Board): Board = 
+  ## Flip a board along the center horizonal axis
+  result = newBoard(Mark.Free)
+  for x in 0 .. 2:
+    result[x] = board[2-x]
 
 proc checkRow(row: array[3, Mark]): Mark =
   ## Evaluates a single row of a board
@@ -93,40 +106,31 @@ proc checkRows(board: Board[Mark]): Mark =
 proc checkDiagonals(board: Board[Mark]): Mark =
   var states: HashSet[Mark]
   states.init()
-  var criss: array[3, Mark]    # Top left to bottom right cell
-  var cross: array[3, Mark]    # Bottom left to top right cell
-  for x in 0 .. 2:
-    criss[x] = board[x][x]
-    cross[x] = board[2-x][x]
-  states.incl(checkRow(criss))
-  states.incl(checkRow(cross))
+  # Construct a temporary row from the diagonal indices, so checkRow cann be used
+  var row: array[3, Mark]
+  # Flip the board so the other diagonal is checked too.
+  for b in [board, board.flipped]:
+    for x in 0 .. 2:
+      row[x] = b[x][x]
+    states.incl(checkRow(row))
   return states.selectResult()
 
 proc checkBoard*(board: Board[Mark]): Mark =
   ## Perform a check on a single sub board to see its result
-
-  # Create a seconded, transposed board.
-  # This way 'checkRows' can be used to check the columns 
-  var transposed = newBoard(Mark.Free);
-  for x in 0 .. 2:
-      for y in 0 .. 2:
-        transposed[x][y] = board[y][x]
-
   var states: HashSet[Mark]
   states.init()
   states.incl(checkDiagonals(board))
-  for b in [board, transposed]:
+  # Create a seconded, transposed board.
+  # This way 'checkRows' can be used to check the columns
+  for b in [board, board.transposed]:
     states.incl(checkRows(b))
 
   return selectResult(states)
     
 proc checkBoard*(board: Board[Board[Mark]]): Mark =
   ## Perform a check on a metaboard to see the overall game result
-
   # This temporary board will hold the intermediate results from each sub board
   var subResults = newBoard(Mark.Free)
-  var states: HashSet[Mark]
-  states.init()
   for x in 0 .. 2:
     for y in 0 .. 2:
       subResults[x][y] = checkBoard(board[x][y])
@@ -136,7 +140,7 @@ proc checkBoard*(board: Board[Board[Mark]]): Mark =
 # Process Player Moves
 ###################################################
 
-proc makeMove*(state: GameState, cell: Coordinate): GameState =
+proc makeMove*(state: GameState, cell: Coordinate): void =
   if state.result != Mark.Free:
     raise newException(IllegalMoveError, "The game has already ended")
   if cell.x > 2 or cell.y > 2:
@@ -156,7 +160,8 @@ proc makeMove*(state: GameState, cell: Coordinate): GameState =
 
   # Exit early. The game has ended.
   if state.result != Mark.Free:
-    return state
+    state.currentBoard = none(Coordinate)
+    return
 
   let nextBoard = checkBoard(state.board[cell.x][cell.y])
   if nextBoard == Mark.Free:
@@ -166,10 +171,8 @@ proc makeMove*(state: GameState, cell: Coordinate): GameState =
 
   state.currentPlayer = state.players.filter(proc (p: Player): bool = 
     p.mark != state.currentPlayer.mark)[0]
-  
-  return state
 
-proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): GameState =
+proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): void =
   if state.result != Mark.Free:
     raise newException(IllegalMoveError, "The game has already ended")
   if checkBoard(state.board[boardChoice.x][boardChoice.y]) != Mark.Free:
@@ -177,4 +180,4 @@ proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): Gam
   if state.currentBoard.isSome:
     raise newException(IllegalMoveError, "Player does not have free choice for board")
   state.currentBoard = boardChoice.some()
-  return state.makeMove(cell)
+  state.makeMove(cell)

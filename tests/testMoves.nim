@@ -17,33 +17,33 @@ suite "Test the move procedures":
     check game.result == Mark.Free
 
   test "First move":
-    game = game.makeMove((1, 1), (1, 1))
+    game.makeMove((1, 1), (1, 1))
     check game.currentPlayer == player2
     check game.turn == 1
     check game.currentBoard == (1, 1).some()
     check game.result == Mark.Free
 
   test "Second move":
-    game = game.makeMove((1, 1), (1, 1))
-    game = game.makeMove((0, 0))
+    game.makeMove((1, 1), (1, 1))
+    game.makeMove((0, 0))
     check game.currentPlayer == player1
     check game.turn == 2
     check game.currentBoard == (0, 0).some()
     check game.result == Mark.Free
 
   test "Move on wrong board":
-    game = game.makeMove((1, 1), (1, 1))
+    game.makeMove((1, 1), (1, 1))
     expect(IllegalMoveError):
-      game = game.makeMove((0, 0), (2, 2))
+      game.makeMove((0, 0), (2, 2))
 
   test "Move on a taken cell":
-    game = game.makeMove((1, 1), (1, 1))
+    game.makeMove((1, 1), (1, 1))
     expect(IllegalMoveError):
-      game = game.makeMove((1, 1))
+      game.makeMove((1, 1))
 
   test "Move out of bounds":
     expect(IndexError):
-      game = game.makeMove((3, 0), (0, 0))
+      game.makeMove((3, 0), (0, 0))
 
   test "Player 1 wins the game":
     let winner = [
@@ -60,7 +60,7 @@ suite "Test the move procedures":
           [Mark.Player1, Mark.Free, Mark.Free]
         ]
     check checkBoard(game.board) == Mark.Free
-    game = game.makeMove((1, 0), (2, 2))
+    game.makeMove((1, 0), (2, 2))
     check game.result == Mark.Player1
     check game.currentPlayer == player1
 
@@ -80,6 +80,6 @@ suite "Test the move procedures":
       [Mark.Player2, Mark.Free, Mark.Player2]
     ]
     check checkBoard(game.board) == Mark.Free
-    game = game.makeMove((2, 1), (2, 2))
+    game.makeMove((2, 1), (2, 2))
     check game.result == Mark.Draw
     check game.currentPlayer == player1
