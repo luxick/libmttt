@@ -136,11 +136,13 @@ proc checkBoard*(board: Board[Board[Mark]]): Mark =
 # Process Player Moves
 ###################################################
 
-proc makeMove*(state: GameState, cell: Coordinate): GameState = 
+proc makeMove*(state: GameState, cell: Coordinate): GameState =
+  if state.result != Mark.Free:
+    raise newException(IllegalMoveError, "The game has already ended")
   if cell.x > 2 or cell.y > 2:
     raise newException(IndexError, "Move target not in bounds of the board")
   if state.currentBoard.isNone:    
-    raise newException(ValueError, "No board value passed")
+    raise newException(IllegalMoveError, "No board value passed")
 
   let board = state.currentBoard.get()
   var currBoard = state.board[board.x][board.y]
@@ -167,7 +169,9 @@ proc makeMove*(state: GameState, cell: Coordinate): GameState =
   
   return state
 
-proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): GameState = 
+proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): GameState =
+  if state.result != Mark.Free:
+    raise newException(IllegalMoveError, "The game has already ended")
   if checkBoard(state.board[boardChoice.x][boardChoice.y]) != Mark.Free:
     raise newException(IllegalMoveError, "Player must choose an open board to play in")
   if state.currentBoard.isSome:
