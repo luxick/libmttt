@@ -1,25 +1,25 @@
-import sets, strformat, options, sequtils
+import sets, options, sequtils
 
 type
-  ## A game board is a simple 2 dimensional array.
+  ## A game board is a 2 dimensional array.
   ## Markers of any type can be placed inside the cells
   Board*[T] = array[3, array[3, T]]
 
-  ## A Position in a board
+  ## A Position on a board
   Coordinate* = tuple[x: int, y:int]
 
   Player* = ref object
     mark*: Mark
     name*: string
 
-  Mark* = enum
-    mPlayer1, ## The mark of the fist player
-    mPlayer2, ## The mark of the second player
-    mFree,    ## This mark signals that a cell is empty
-    mDraw     ## Special mark to indicate the game has ended in a draw
+  Mark* {.pure.} = enum
+    Player1, ## The mark of the fist player
+    Player2, ## The mark of the second player
+    Free,    ## This mark signals that a cell is empty
+    Draw     ## Special mark to indicate the game has ended in a draw
 
   GameState* = ref object
-    ## Contains all state for a pint in the game
+    ## Contains all state for a game
     board*: Board[Board[Mark]]
     players*: array[2, Player]
     currentPlayer*: Player
@@ -28,20 +28,11 @@ type
     turn*: int
 
   IllegalMoveError* = object of Exception
+  IIlegalStateError* = object of Exception
 
-proc `$`*(player: Player): string = 
-  $player.name
-
-proc `$`*(player: ref Player): string = 
-  $player.name
-
-proc `$`*(game: GameState): string = 
-  &"""
-  Game is in turn {$game.turn}
-  Players are: '{$game.players[0]}' and '{$game.players[1]}'
-  Current player: '{$game.currentPlayer}'
-  Game state is: {$game.result}
-  """
+###################################################
+# Constructors
+###################################################
 
 proc newBoard[T](initial: T): Board[T] =
   ## Create a new game board filled with the initial value
@@ -51,23 +42,15 @@ proc newBoard[T](initial: T): Board[T] =
     [initial, initial, initial]
   ]
 
-proc newMetaBoard[T](val: T): Board[Board[T]] =
-  ## Create the meta board, composed out of 9 normal boards.
-  [
-    [newBoard(val), newBoard(val), newBoard(val)],
-    [newBoard(val), newBoard(val), newBoard(val)],
-    [newBoard(val), newBoard(val), newBoard(val)]
-  ]
-
-proc newGame*(player1: var Player, player2: var Player): GameState =
-  ## Create a new game board
-  player1.mark = mPlayer1
-  player2.mark = mPlayer2
+proc newGameState*(player1: var Player, player2: var Player): GameState =
+  ## Initializes a new game state with the passed players
+  player1.mark = Mark.Player1
+  player2.mark = Mark.Player2
   GameState(
     players: [player1, player2],
     currentPlayer: player1,
-    result: mFree,
-    board: newMetaBoard(mFree))
+    result: Mark.Free,
+    board: newBoard(newBoard(Mark.Free)))
 
 ###################################################
 # Board Checking
@@ -75,28 +58,29 @@ proc newGame*(player1: var Player, player2: var Player): GameState =
 
 proc selectResult(states: HashSet[Mark]): Mark =
   ## Analyse a set of results and select the correct one
-  if states.contains(mPlayer1) and
-      states.contains(mPlayer2):
-      raise newException(Exception, "Both players cannot win at the same time")
+  if states.contains(Mark.Player1) and
+      states.contains(Mark.Player2):
+      raise newException(IIlegalStateError, "Both players cannot win at the same time")
 
-  if states.contains(mPlayer1):
-    return mPlayer1
-  if states.contains(mPlayer2):
-    return mPlayer2
-  if states.contains(mFree):
-    return mFree
-  return mDraw
+  if states.contains(Mark.Player1):
+    return Mark.Player1
+  if states.contains(Mark.Player2):
+    return Mark.Player2
+  if states.contains(Mark.Free):
+    return Mark.Free
+  return Mark.Draw
 
 proc checkRow(row: array[3, Mark]): Mark =
+  ## Evaluates a single row of a board
   var tokens = toHashSet(row)
   # A player has won
-  if tokens.len == 1 and not tokens.contains(mFree):
+  if tokens.len == 1 and not tokens.contains(Mark.Free):
     return tokens.pop()
   # The row is full
-  if tokens.len == 2 and not tokens.contains(mFree):
-    return mDraw
+  if tokens.len == 2 and not tokens.contains(Mark.Free):
+    return Mark.Draw
   # There are still cells free in this row
-  return mFree
+  return Mark.Free
 
 proc checkRows(board: Board[Mark]): Mark =
   ## Iterate over all rows of this board and return the result.
@@ -109,13 +93,13 @@ proc checkRows(board: Board[Mark]): Mark =
 proc checkDiagonals(board: Board[Mark]): Mark =
   var states: HashSet[Mark]
   states.init()
-  var topToBottom: array[3, Mark]
-  var bottomToTop: array[3, Mark]
+  var criss: array[3, Mark]    # Top left to bottom right cell
+  var cross: array[3, Mark]    # Bottom left to top right cell
   for x in 0 .. 2:
-    topToBottom[x] = board[x][x]
-    bottomToTop[x] = board[2-x][x]
-  states.incl(checkRow(topToBottom))
-  states.incl(checkRow(bottomToTop))
+    criss[x] = board[x][x]
+    cross[x] = board[2-x][x]
+  states.incl(checkRow(criss))
+  states.incl(checkRow(cross))
   return states.selectResult()
 
 proc checkBoard*(board: Board[Mark]): Mark =
@@ -123,7 +107,7 @@ proc checkBoard*(board: Board[Mark]): Mark =
 
   # Create a seconded, transposed board.
   # This way 'checkRows' can be used to check the columns 
-  var transposed = newBoard(mFree);
+  var transposed = newBoard(Mark.Free);
   for x in 0 .. 2:
       for y in 0 .. 2:
         transposed[x][y] = board[y][x]
@@ -140,7 +124,7 @@ proc checkBoard*(board: Board[Board[Mark]]): Mark =
   ## Perform a check on a metaboard to see the overall game result
 
   # This temporary board will hold the intermediate results from each sub board
-  var subResults = newBoard(mFree)
+  var subResults = newBoard(Mark.Free)
   var states: HashSet[Mark]
   states.init()
   for x in 0 .. 2:
@@ -161,7 +145,7 @@ proc makeMove*(state: GameState, cell: Coordinate): GameState =
   let board = state.currentBoard.get()
   var currBoard = state.board[board.x][board.y]
 
-  if currBoard[cell.x][cell.y] != mFree:
+  if currBoard[cell.x][cell.y] != Mark.Free:
     raise newException(IllegalMoveError, "Chosen cell is not free")
 
   state.board[board.x][board.y][cell.x][cell.y] = state.currentPlayer.mark
@@ -169,11 +153,11 @@ proc makeMove*(state: GameState, cell: Coordinate): GameState =
   state.result = checkBoard(state.board)
 
   # Exit early. The game has ended.
-  if state.result != mFree:
+  if state.result != Mark.Free:
     return state
 
   let nextBoard = checkBoard(state.board[cell.x][cell.y])
-  if nextBoard == mFree:
+  if nextBoard == Mark.Free:
     state.currentBoard = cell.some()
   else:
     state.currentBoard = none(Coordinate)
@@ -184,7 +168,7 @@ proc makeMove*(state: GameState, cell: Coordinate): GameState =
   return state
 
 proc makeMove*(state: GameState, cell: Coordinate, boardChoice: Coordinate): GameState = 
-  if checkBoard(state.board[boardChoice.x][boardChoice.y]) != mFree:
+  if checkBoard(state.board[boardChoice.x][boardChoice.y]) != Mark.Free:
     raise newException(IllegalMoveError, "Player must choose an open board to play in")
   if state.currentBoard.isSome:
     raise newException(IllegalMoveError, "Player does not have free choice for board")
